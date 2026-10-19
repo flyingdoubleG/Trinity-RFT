@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Multi-turn text-to-SQL workflow on local SQLite databases (BIRD / Spider), no Docker needed."""
 
+from dataclasses import asdict
 from typing import List, Optional
 
 from trinity.common.experience import Experience
@@ -80,9 +81,12 @@ class SQLiteSQLWorkflow(MultiTurnWorkflow):
             self.logger.warning(f"Reference SQL fails on {db_path}: {env.gold_error}")
         memory = self.build_messages(db_path)
         reward, rounds, last_ok_sql = 0.0, 0, None
+        # Honour the task's sampling settings (e.g. eval temperature); one response per turn.
+        rollout_args = asdict(self.task.rollout_args)
+        rollout_args["n"] = 1
 
         for rounds in range(1, self.max_env_steps + 1):
-            responses = await self.model.chat_async(memory, n=1)
+            responses = await self.model.chat_async(memory, **rollout_args)
             text = responses[0].response_text
             memory.append({"role": "assistant", "content": text})
             result = env.step(text)
